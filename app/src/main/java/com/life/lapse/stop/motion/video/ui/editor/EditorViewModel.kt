@@ -1,31 +1,27 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-// Represents the state of the Editor UI
-data class EditorUiState(
-    val frames: List<String> = emptyList(), // Will hold image URIs
+// Represents the state of the project being edited
+data class ProjectUiState(
+    val frames: List<Uri> = emptyList(), // Now holds real image URIs
+    val selectedFrameUri: Uri? = null,
     val selectedSpeed: Float = 1.0f
 )
 
+// This ViewModel will be shared between the Camera and Editor screens.
 class EditorViewModel : ViewModel() {
 
-    private val _uiState = MutableStateFlow(EditorUiState())
+    private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState = _uiState.asStateFlow()
 
-    init {
-        // Load mock data for now so we can see the UI
-        loadMockFrames()
-    }
-
-    private fun loadMockFrames() {
-        _uiState.update {
-            it.copy(
-                frames = listOf("frame1", "frame2", "frame3", "frame4") // Simple placeholders
-            )
+    fun addFrame(uri: Uri) {
+        _uiState.update { currentState ->
+            currentState.copy(frames = currentState.frames + uri)
         }
     }
 
@@ -41,7 +37,8 @@ class EditorViewModel : ViewModel() {
         // TODO: Implement duplicate logic
     }
 
-    fun onAddFrameClicked() {
-        // TODO: Implement logic to go back to camera to add a frame
+    // This function will be used to clear the project when we are done.
+    fun clearProject() {
+        _uiState.value = ProjectUiState()
     }
 }
