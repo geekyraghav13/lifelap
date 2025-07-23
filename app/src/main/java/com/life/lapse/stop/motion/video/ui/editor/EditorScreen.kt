@@ -1,5 +1,6 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -22,12 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.ui.theme.LifeLapseTheme
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 
@@ -35,7 +37,7 @@ import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 @Composable
 fun EditorScreen(
     onNavigateBack: () -> Unit,
-    editorViewModel: EditorViewModel = viewModel()
+    editorViewModel: EditorViewModel // Receives the shared ViewModel
 ) {
     val uiState by editorViewModel.uiState.collectAsState()
 
@@ -71,28 +73,27 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-            // 1. Video Player Placeholder
             VideoPlayerPlaceholder()
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 2. Timeline Section
             Text("Timeline", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(8.dp))
-            FrameTimeline(frames = uiState.frames)
+            FrameTimeline(
+                frames = uiState.frames, // Use real frames from the ViewModel
+                selectedFrameUri = uiState.selectedFrameUri
+            )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 3. Playback Speed Section
             PlaybackSpeedControls(
                 selectedSpeed = uiState.selectedSpeed,
                 onSpeedSelected = { editorViewModel.onSpeedSelected(it) }
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 4. Frame Actions
             FrameActionButtons(
                 onDelete = { editorViewModel.onDeleteFrameClicked() },
                 onDuplicate = { editorViewModel.onDuplicateFrameClicked() },
-                onAdd = { editorViewModel.onAddFrameClicked() }
+                onAdd = { /* TODO: Navigate back to camera */ }
             )
         }
     }
@@ -122,25 +123,41 @@ fun VideoPlayerPlaceholder() {
 }
 
 @Composable
-fun FrameTimeline(frames: List<String>) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(frames) { frame ->
-            Box(
-                modifier = Modifier
-                    .size(width = 80.dp, height = 60.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(
-                        2.dp,
-                        // This logic would be expanded to highlight the truly selected frame
-                        if (frames.indexOf(frame) == 0) Pink_Primary else Color.Transparent,
-                        RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                // In the future, this will be an AsyncImage of the frame
+fun FrameTimeline(frames: List<Uri>, selectedFrameUri: Uri?) {
+    if (frames.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No frames captured yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } else {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(frames) { frameUri ->
+                Box(
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 60.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            2.dp,
+                            // Highlight the first frame by default, or the selected one
+                            if (frameUri == selectedFrameUri || (selectedFrameUri == null && frames.indexOf(frameUri) == 0)) Pink_Primary else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                ) {
+                    // Use AsyncImage to load the real photo
+                    AsyncImage(
+                        model = frameUri,
+                        contentDescription = "Captured frame",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
     }
@@ -174,38 +191,19 @@ fun FrameActionButtons(onDelete: () -> Unit, onDuplicate: () -> Unit, onAdd: () 
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionButton(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Delete,
-            text = "Delete Frame",
-            onClick = onDelete
-        )
-        ActionButton(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.ContentCopy,
-            text = "Duplicate",
-            onClick = onDuplicate
-        )
-        ActionButton(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Add,
-            text = "Add Frame",
-            onClick = onAdd
-        )
+        ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Delete, text = "Delete Frame", onClick = onDelete)
+        ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.ContentCopy, text = "Duplicate", onClick = onDuplicate)
+        ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Add, text = "Add Frame", onClick = onAdd)
     }
 }
 
 @Composable
 fun ActionButton(modifier: Modifier = Modifier, icon: ImageVector, text: String, onClick: () -> Unit) {
-    // FIX: The TextButton now takes a modifier to accept the weight.
     TextButton(
         onClick = onClick,
         modifier = modifier,
-        // Also remove excess padding to give content more space
         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
     ) {
-        // FIX: Add a Row with horizontalArrangement = Center to properly center the content
-        // within the space provided by Modifier.weight().
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
@@ -228,6 +226,7 @@ fun ActionButton(modifier: Modifier = Modifier, icon: ImageVector, text: String,
 @Composable
 fun EditorScreenPreview() {
     LifeLapseTheme {
-        EditorScreen(onNavigateBack = {})
+        // Previewing this screen is complex as it relies on a shared ViewModel.
+        // For a static preview, you could pass a mock ViewModel.
     }
 }

@@ -2,6 +2,7 @@ package com.life.lapse.stop.motion.video.ui.camera
 
 // --------- CRITICAL: REQUIRED IMPORTS BLOCK ---------
 import android.Manifest
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -9,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -44,30 +46,34 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.life.lapse.stop.motion.video.ui.editor.EditorViewModel
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
-import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
+import java.util.concurrent.Executor
 // --------- END OF IMPORTS BLOCK ---------
 
 @Composable
 fun CameraScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToEditor: () -> Unit, // Add the navigation callback
-    cameraViewModel: CameraViewModel = viewModel()
+    onNavigateToEditor: () -> Unit,
+    projectViewModel: EditorViewModel // Receives the shared ViewModel from AppNavigation
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
-    val uiState by cameraViewModel.uiState.collectAsState()
+    // Get the list of frames from the shared ViewModel
+    val uiState by projectViewModel.uiState.collectAsState()
 
     var hasPermission by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            hasPermission = isGranted
-        }
+        onResult = { isGranted -> hasPermission = isGranted }
     )
+
+    // Manage camera selector locally within this screen for now
+    var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_BACK_CAMERA) }
 
     LaunchedEffect(Unit) {
         permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -81,38 +87,72 @@ fun CameraScreen(
                 modifier = Modifier.fillMaxSize(),
                 imageCapture = imageCapture,
                 lifecycleOwner = lifecycleOwner,
-                cameraSelector = uiState.cameraSelector
+                cameraSelector = cameraSelector
             )
             CameraControls(
                 modifier = Modifier.fillMaxSize(),
                 onNavigateBack = onNavigateBack,
                 onCaptureClick = {
-                    coroutineScope.launch {
-                        cameraViewModel.takePhoto(
-                            context = context,
-                            imageCapture = imageCapture,
-                            executor = ContextCompat.getMainExecutor(context),
-                            onSuccess = { uri ->
-                                Toast.makeText(context, "Image Saved!", Toast.LENGTH_SHORT).show()
-                            },
-                            onError = { error ->
-                                Toast.makeText(context, "Capture Failed!", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }
+                    takePhoto(
+                        context = context,
+                        imageCapture = imageCapture,
+                        executor = ContextCompat.getMainExecutor(context),
+                        onImageCaptured = { uri ->
+                            // Add the new photo to the shared ViewModel
+                            projectViewModel.addFrame(uri)
+                            Toast.makeText(context, "Frame Added!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { error ->
+                            Log.e("CameraScreen", "Capture error: $error")
+                        }
+                    )
                 },
                 onFlipCameraClick = {
-                    cameraViewModel.onFlipCameraClicked()
+                    // Update the local camera selector state
+                    cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    } else {
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    }
                 },
-                capturedImages = uiState.capturedImages,
-                isCapturing = uiState.isCapturing,
-                onDoneClick = onNavigateToEditor // Pass the navigation callback
+                capturedImages = uiState.frames, // Display frames from the shared ViewModel
+                onDoneClick = onNavigateToEditor
             )
         } else {
             PermissionDeniedView()
         }
     }
 }
+
+fun takePhoto(
+    context: Context,
+    imageCapture: ImageCapture,
+    executor: Executor,
+    onImageCaptured: (Uri) -> Unit,
+    onError: (ImageCaptureException) -> Unit
+) {
+    val photoFile = File.createTempFile(
+        "LapseFrame_${System.currentTimeMillis()}",
+        ".jpg",
+        context.cacheDir
+    )
+    val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+
+    imageCapture.takePicture(
+        outputOptions,
+        executor,
+        object : ImageCapture.OnImageSavedCallback {
+            override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                val savedUri = outputFileResults.savedUri ?: Uri.fromFile(photoFile)
+                onImageCaptured(savedUri)
+            }
+            override fun onError(exception: ImageCaptureException) {
+                onError(exception)
+            }
+        }
+    )
+}
+
 
 @Composable
 fun CameraPreviewView(
@@ -152,8 +192,7 @@ fun CameraControls(
     onCaptureClick: () -> Unit,
     onFlipCameraClick: () -> Unit,
     capturedImages: List<Uri>,
-    isCapturing: Boolean,
-    onDoneClick: () -> Unit // Receive the callback
+    onDoneClick: () -> Unit
 ) {
     Column(modifier = modifier) {
         Row(
@@ -199,21 +238,17 @@ fun CameraControls(
                 }
             }
 
-            val shutterScale by animateFloatAsState(targetValue = if (isCapturing) 1.2f else 1.0f, label = "shutterScale")
+            val shutterScale by animateFloatAsState(targetValue = if (false) 1.2f else 1.0f, label = "shutterScale")
             Box(contentAlignment = Alignment.Center) {
                 IconButton(
                     onClick = onCaptureClick,
-                    enabled = !isCapturing,
+                    enabled = true,
                     modifier = Modifier.size(80.dp).scale(shutterScale).clip(CircleShape).background(Pink_Primary)
                 ) {
                     Icon(Icons.Default.Camera, "Capture", tint = Color.White, modifier = Modifier.size(40.dp))
                 }
-                if (isCapturing) {
-                    CircularProgressIndicator(modifier = Modifier.size(80.dp), color = Color.White, strokeWidth = 2.dp)
-                }
             }
 
-            // Connect the onDoneClick callback here
             IconButton(
                 onClick = onDoneClick,
                 modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.DarkGray).border(2.dp, Color.White, CircleShape)
