@@ -1,8 +1,10 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -13,22 +15,23 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.ui.theme.LifeLapseTheme
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
@@ -37,9 +40,18 @@ import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 @Composable
 fun EditorScreen(
     onNavigateBack: () -> Unit,
-    editorViewModel: EditorViewModel // Receives the shared ViewModel
+    editorViewModel: EditorViewModel
 ) {
     val uiState by editorViewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    // Show a toast message when export is finished
+    LaunchedEffect(uiState.exportResult) {
+        uiState.exportResult?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            editorViewModel.clearExportResult()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -52,7 +64,8 @@ fun EditorScreen(
                 },
                 actions = {
                     Button(
-                        onClick = { /* TODO: Handle Export */ },
+                        onClick = { editorViewModel.onExportClicked(context) },
+                        enabled = !uiState.isExporting, // Disable button while exporting
                         colors = ButtonDefaults.buttonColors(containerColor = Pink_Primary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.padding(end = 8.dp)
@@ -73,96 +86,85 @@ fun EditorScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
-            VideoPlayerPlaceholder()
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text("Timeline", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            FrameTimeline(
-                frames = uiState.frames, // Use real frames from the ViewModel
-                selectedFrameUri = uiState.selectedFrameUri
+            VideoPlayer(
+                frames = uiState.frames,
+                currentFrameIndex = uiState.currentFrameIndex,
+                isPlaying = uiState.isPlaying,
+                onTogglePlayback = { editorViewModel.onTogglePlayback() }
             )
             Spacer(modifier = Modifier.height(24.dp))
-
+            Text("Timeline", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            FrameTimeline(frames = uiState.frames, selectedFrameUri = uiState.selectedFrameUri)
+            Spacer(modifier = Modifier.height(24.dp))
             PlaybackSpeedControls(
                 selectedSpeed = uiState.selectedSpeed,
                 onSpeedSelected = { editorViewModel.onSpeedSelected(it) }
             )
             Spacer(modifier = Modifier.height(24.dp))
-
             FrameActionButtons(
                 onDelete = { editorViewModel.onDeleteFrameClicked() },
                 onDuplicate = { editorViewModel.onDuplicateFrameClicked() },
-                onAdd = { /* TODO: Navigate back to camera */ }
+                onAdd = { /* TODO */ }
             )
         }
-    }
-}
 
-@Composable
-fun VideoPlayerPlaceholder() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16 / 9f)
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surface),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.PlayArrow,
-            contentDescription = "Play Video",
-            tint = Color.White,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.4f))
-                .padding(8.dp)
-        )
-    }
-}
-
-@Composable
-fun FrameTimeline(frames: List<Uri>, selectedFrameUri: Uri?) {
-    if (frames.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("No frames captured yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Show a loading dialog while exporting
+        if (uiState.isExporting) {
+            ExportingDialog(progress = uiState.exportProgress)
         }
-    } else {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+    }
+}
+
+@Composable
+fun ExportingDialog(progress: Float) {
+    Dialog(onDismissRequest = { /* Cannot be dismissed */ }) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
-            items(frames) { frameUri ->
-                Box(
-                    modifier = Modifier
-                        .size(width = 80.dp, height = 60.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(
-                            2.dp,
-                            // Highlight the first frame by default, or the selected one
-                            if (frameUri == selectedFrameUri || (selectedFrameUri == null && frames.indexOf(frameUri) == 0)) Pink_Primary else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                ) {
-                    // Use AsyncImage to load the real photo
-                    AsyncImage(
-                        model = frameUri,
-                        contentDescription = "Captured frame",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("Exporting Video...", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(16.dp))
+                LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("${(progress * 100).toInt()}%")
             }
         }
     }
 }
 
+@Composable
+fun VideoPlayer(frames: List<Uri>, currentFrameIndex: Int, isPlaying: Boolean, onTogglePlayback: () -> Unit) {
+    Box(modifier = Modifier.fillMaxWidth().aspectRatio(16/9f).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface).clickable(onClick = onTogglePlayback), contentAlignment = Alignment.Center) {
+        if (frames.isNotEmpty()) {
+            AsyncImage(model = frames[currentFrameIndex], contentDescription = "Current frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        }
+        Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+            Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "Pause" else "Play", tint = Color.White, modifier = Modifier.size(40.dp))
+        }
+    }
+}
+@Composable
+fun FrameTimeline(frames: List<Uri>, selectedFrameUri: Uri?) {
+    if (frames.isEmpty()) {
+        Box(modifier = Modifier.fillMaxWidth().height(60.dp), contentAlignment = Alignment.Center) {
+            Text("No frames captured yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } else {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(frames) { frameUri ->
+                Box(modifier = Modifier.size(width = 80.dp, height = 60.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surface).border(2.dp, if (frameUri == selectedFrameUri || (selectedFrameUri == null && frames.indexOf(frameUri) == 0)) Pink_Primary else Color.Transparent, RoundedCornerShape(8.dp))) {
+                    AsyncImage(model = frameUri, contentDescription = "Captured frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                }
+            }
+        }
+    }
+}
 @Composable
 fun PlaybackSpeedControls(selectedSpeed: Float, onSpeedSelected: (Float) -> Unit) {
     Column {
@@ -171,62 +173,33 @@ fun PlaybackSpeedControls(selectedSpeed: Float, onSpeedSelected: (Float) -> Unit
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val speeds = listOf(0.5f, 1f, 2f)
             speeds.forEach { speed ->
-                Button(
-                    onClick = { onSpeedSelected(speed) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedSpeed == speed) Pink_Primary else MaterialTheme.colorScheme.surface
-                    )
-                ) {
+                Button(onClick = { onSpeedSelected(speed) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = if (selectedSpeed == speed) Pink_Primary else MaterialTheme.colorScheme.surface)) {
                     Text("${speed}x")
                 }
             }
         }
     }
 }
-
 @Composable
 fun FrameActionButtons(onDelete: () -> Unit, onDuplicate: () -> Unit, onAdd: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Delete, text = "Delete Frame", onClick = onDelete)
         ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.ContentCopy, text = "Duplicate", onClick = onDuplicate)
         ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Add, text = "Add Frame", onClick = onAdd)
     }
 }
-
 @Composable
 fun ActionButton(modifier: Modifier = Modifier, icon: ImageVector, text: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    TextButton(onClick = onClick, modifier = modifier, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(imageVector = icon, contentDescription = text, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
-
 @Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
 fun EditorScreenPreview() {
-    LifeLapseTheme {
-        // Previewing this screen is complex as it relies on a shared ViewModel.
-        // For a static preview, you could pass a mock ViewModel.
-    }
+    LifeLapseTheme { /* Previewing this screen is complex as it relies on a shared ViewModel. */ }
 }

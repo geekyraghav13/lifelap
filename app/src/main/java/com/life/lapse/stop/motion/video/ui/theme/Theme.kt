@@ -6,10 +6,9 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import com.google.accompanist.systemuicontroller.rememberSystemUiController
 
 private val DarkColorScheme = darkColorScheme(
     primary = Pink_Primary,
@@ -21,7 +20,6 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = Text_Gray
 )
 
-
 @Composable
 fun LifeLapseTheme(
     content: @Composable () -> Unit
@@ -31,18 +29,13 @@ fun LifeLapseTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
+            // FIX: The deprecated line below has been removed.
+            // window.statusBarColor = colorScheme.background.toArgb()
+
+            // This line correctly sets the status bar icons to be light,
+            // which is what we need for a dark background.
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
         }
-    }
-
-    // Accompanist is an easier way to handle this
-    val systemUiController = rememberSystemUiController()
-    SideEffect {
-        systemUiController.setSystemBarsColor(
-            color = Dark_Background,
-            darkIcons = false
-        )
     }
 
     MaterialTheme(
