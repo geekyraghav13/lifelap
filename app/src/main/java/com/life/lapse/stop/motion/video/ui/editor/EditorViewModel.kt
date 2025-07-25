@@ -13,22 +13,21 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-// NEW: A data class to wrap each frame with a unique ID.
-// This is the key to fixing the crash.
 data class Frame(
     val id: String = UUID.randomUUID().toString(),
     val uri: Uri
 )
 
-// Represents the state of the project being editedaz
 data class ProjectUiState(
-    val frames: List<Frame> = emptyList(), // Now a list of Frame objects
+    val frames: List<Frame> = emptyList(),
     val selectedFrame: Frame? = null,
     val selectedSpeed: Float = 1.0f,
     val isPlaying: Boolean = false,
     val currentFrameIndex: Int = 0,
-    // FIX: Corrected the typo from "exportResulat" to "exportResult"
-    val exportResult: String? = null
+    val exportResult: String? = null,
+    val isFullScreen: Boolean = false,
+    // NEW: State to control visibility of player controls in fullscreen
+    val showFullScreenControls: Boolean = true
 )
 
 class EditorViewModel : ViewModel() {
@@ -36,6 +35,7 @@ class EditorViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState = _uiState.asStateFlow()
     private var playbackJob: Job? = null
+    private var hideControlsJob: Job? = null // NEW: Job to manage auto-hiding
 
     fun onExportClicked(context: Context) {
         if (_uiState.value.frames.isEmpty()) {
@@ -86,7 +86,6 @@ class EditorViewModel : ViewModel() {
             } else {
                 newFrames.getOrNull(deletedIndex.coerceAtMost(newFrames.size - 1))
             }
-
             currentState.copy(
                 frames = newFrames,
                 selectedFrame = newSelectedFrame
@@ -100,16 +99,13 @@ class EditorViewModel : ViewModel() {
             val currentFrames = currentState.frames
             val selectedIndex = currentFrames.indexOf(selectedFrame)
             if (selectedIndex == -1) return@update currentState
-
-            // Create a new Frame object with a new unique ID but the same image Uri
             val newFrame = Frame(uri = selectedFrame.uri)
-
             val newFrames = currentFrames.toMutableList().apply {
                 add(selectedIndex + 1, newFrame)
             }
             currentState.copy(
                 frames = newFrames,
-                selectedFrame = newFrame // Select the newly created duplicate
+                selectedFrame = newFrame
             )
         }
     }
@@ -126,6 +122,39 @@ class EditorViewModel : ViewModel() {
     fun onSeekToFrame(frameIndex: Int) {
         pausePlayback()
         _uiState.update { it.copy(currentFrameIndex = frameIndex) }
+    }
+
+    fun onToggleFullScreen() {
+        val isEnteringFullScreen = !_uiState.value.isFullScreen
+        _uiState.update { it.copy(isFullScreen = isEnteringFullScreen, showFullScreenControls = true) }
+        if (isEnteringFullScreen) {
+            // When entering fullscreen, start the timer to hide controls
+            scheduleHideControls()
+        } else {
+            // When exiting, cancel any pending hide operations
+            hideControlsJob?.cancel()
+        }
+    }
+
+    // NEW: When tapping the screen in fullscreen, show controls and reset the timer
+    fun onFullScreenPlayerTap() {
+        if (!_uiState.value.isFullScreen) return
+
+        if (_uiState.value.showFullScreenControls) {
+            // If controls are already showing, do nothing
+            return
+        }
+
+        _uiState.update { it.copy(showFullScreenControls = true) }
+        scheduleHideControls()
+    }
+
+    private fun scheduleHideControls() {
+        hideControlsJob?.cancel()
+        hideControlsJob = viewModelScope.launch {
+            delay(3000) // Wait for 3 seconds
+            _uiState.update { it.copy(showFullScreenControls = false) }
+        }
     }
 
     private fun startPlayback() {

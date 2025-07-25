@@ -1,10 +1,14 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
-import android.net.Uri
+import android.app.Activity
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -12,29 +16,26 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 import org.burnoutcrew.reorderable.ReorderableItem
@@ -52,6 +53,8 @@ fun EditorScreen(
     val uiState by editorViewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    SystemUiController(isFullScreen = uiState.isFullScreen)
+
     LaunchedEffect(uiState.exportResult) {
         uiState.exportResult?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -59,191 +62,258 @@ fun EditorScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("My Project", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    Button(
-                        onClick = { editorViewModel.onExportClicked(context) },
-                        colors = ButtonDefaults.buttonColors(containerColor = Pink_Primary),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text("Export")
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
+    if (uiState.isFullScreen) {
+        /** ✅ FULLSCREEN MODE UI **/
+        Box(
             modifier = Modifier
-                .padding(paddingValues)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
             AdvancedVideoPlayer(
-                frames = uiState.frames, // This is now List<Frame>
+                frames = uiState.frames,
                 currentFrameIndex = uiState.currentFrameIndex,
                 isPlaying = uiState.isPlaying,
+                isFullScreen = true,
+                showControls = uiState.showFullScreenControls,
+                onPlayerTap = { editorViewModel.onFullScreenPlayerTap() },
                 onTogglePlayback = { editorViewModel.onTogglePlayback() },
-                onSeek = { editorViewModel.onSeekToFrame(it) }
+                onSeek = { editorViewModel.onSeekToFrame(it) },
+                onToggleFullScreen = { editorViewModel.onToggleFullScreen() }
             )
-            Spacer(modifier = Modifier.height(24.dp))
+        }
+    } else {
+        /** ✅ NORMAL MODE UI **/
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { Text("My Project", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        }
+                    },
+                    actions = {
+                        Button(
+                            onClick = { editorViewModel.onExportClicked(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Pink_Primary),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text("Export")
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            ) {
+                /** ✅ Video Player in normal mode **/
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16 / 9f)
+                ) {
+                    AdvancedVideoPlayer(
+                        frames = uiState.frames,
+                        currentFrameIndex = uiState.currentFrameIndex,
+                        isPlaying = uiState.isPlaying,
+                        isFullScreen = false,
+                        showControls = true,
+                        onPlayerTap = { editorViewModel.onFullScreenPlayerTap() },
+                        onTogglePlayback = { editorViewModel.onTogglePlayback() },
+                        onSeek = { editorViewModel.onSeekToFrame(it) },
+                        onToggleFullScreen = { editorViewModel.onToggleFullScreen() }
+                    )
+                }
 
-            Text("Timeline", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(8.dp))
-            FrameTimeline(
-                frames = uiState.frames, // This is now List<Frame>
-                selectedFrame = uiState.selectedFrame, // FIX: Use selectedFrame
-                onFrameSelected = { frame -> editorViewModel.onFrameSelected(frame) }, // FIX: Pass the whole Frame object
-                onMove = { from, to -> editorViewModel.onMoveFrame(from, to) }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-            PlaybackSpeedControls(
-                selectedSpeed = uiState.selectedSpeed,
-                onSpeedSelected = { editorViewModel.onSpeedSelected(it) }
-            )
-            Spacer(modifier = Modifier.height(24.dp))
+                /** ✅ Timeline Section **/
+                Text("Timeline", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                FrameTimeline(
+                    frames = uiState.frames,
+                    selectedFrame = uiState.selectedFrame,
+                    onFrameSelected = { frame -> editorViewModel.onFrameSelected(frame) },
+                    onMove = { from, to -> editorViewModel.onMoveFrame(from, to) }
+                )
 
-            FrameActionButtons(
-                onDelete = { editorViewModel.onDeleteFrameClicked() },
-                onDuplicate = { editorViewModel.onDuplicateFrameClicked() },
-                onAdd = onNavigateToCamera,
-                deleteEnabled = uiState.selectedFrame != null, // FIX: Use selectedFrame
-                duplicateEnabled = uiState.selectedFrame != null // FIX: Use selectedFrame
-            )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                /** ✅ Playback Speed Controls **/
+                PlaybackSpeedControls(
+                    selectedSpeed = uiState.selectedSpeed,
+                    onSpeedSelected = { editorViewModel.onSpeedSelected(it) }
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                /** ✅ Frame Actions **/
+                FrameActionButtons(
+                    onDelete = { editorViewModel.onDeleteFrameClicked() },
+                    onDuplicate = { editorViewModel.onDuplicateFrameClicked() },
+                    onAdd = onNavigateToCamera,
+                    deleteEnabled = uiState.selectedFrame != null,
+                    duplicateEnabled = uiState.selectedFrame != null
+                )
+            }
         }
     }
 }
 
 @Composable
 fun AdvancedVideoPlayer(
-    frames: List<Frame>, // FIX: Changed from List<Uri> to List<Frame>
+    frames: List<Frame>,
     currentFrameIndex: Int,
     isPlaying: Boolean,
+    isFullScreen: Boolean,
+    showControls: Boolean,
+    onPlayerTap: () -> Unit,
     onTogglePlayback: () -> Unit,
-    onSeek: (Int) -> Unit
+    onSeek: (Int) -> Unit,
+    onToggleFullScreen: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(16 / 9f)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(if (isFullScreen) 0.dp else 16.dp))
             .background(MaterialTheme.colorScheme.surface)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        onTogglePlayback() // Double tap → Play/Pause
+                    },
+                    onTap = {
+                        if (isFullScreen) {
+                            onPlayerTap() // Single tap → Show controls
+                        } else {
+                            onTogglePlayback() // Normal mode → Tap toggles playback
+                        }
+                    }
+                )
+            }
     ) {
         if (frames.isNotEmpty()) {
             AsyncImage(
-                model = frames.getOrNull(currentFrameIndex)?.uri, // FIX: Use .uri
+                model = frames.getOrNull(currentFrameIndex)?.uri,
                 contentDescription = "Current frame",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                        startY = 300f
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(onClick = onTogglePlayback),
-            contentAlignment = Alignment.Center
+
+        AnimatedVisibility(
+            visible = if (isFullScreen) showControls else true,
+            enter = fadeIn(),
+            exit = fadeOut()
         ) {
-            if (!isPlaying) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(40.dp)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+                            startY = 300f
+                        )
                     )
-                }
-            }
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp),
-            verticalArrangement = Arrangement.Bottom
-        ) {
-            if (frames.size > 1) {
-                Slider(
-                    value = currentFrameIndex.toFloat(),
-                    onValueChange = { onSeek(it.toInt()) },
-                    valueRange = 0f..(frames.size - 1).toFloat(),
-                    steps = frames.size - 2,
-                    colors = SliderDefaults.colors(
-                        thumbColor = Pink_Primary,
-                        activeTrackColor = Pink_Primary,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                    )
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            )
+
+            // Play button center overlay
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                IconButton(onClick = onTogglePlayback) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White
+                if (!isPlaying) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+            }
+
+            // Bottom controls
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.Bottom
+            ) {
+                if (frames.size > 1) {
+                    Slider(
+                        value = currentFrameIndex.toFloat(),
+                        onValueChange = { onSeek(it.toInt()) },
+                        valueRange = 0f..(frames.size - 1).toFloat(),
+                        steps = frames.size - 2,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Pink_Primary,
+                            activeTrackColor = Pink_Primary,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                        )
                     )
                 }
-                if (frames.isNotEmpty()) {
-                    Text(
-                        text = "${currentFrameIndex + 1} / ${frames.size}",
-                        color = Color.White,
-                        fontSize = 14.sp
-                    )
-                }
-                IconButton(onClick = { /* TODO: Implement fullscreen */ }) {
-                    Icon(
-                        imageVector = Icons.Default.Fullscreen,
-                        contentDescription = "Fullscreen",
-                        tint = Color.White
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onTogglePlayback) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White
+                        )
+                    }
+                    if (frames.isNotEmpty()) {
+                        Text(
+                            text = "${currentFrameIndex + 1} / ${frames.size}",
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                    }
+                    IconButton(onClick = onToggleFullScreen) {
+                        Icon(
+                            imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                            contentDescription = "Fullscreen",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-
 @Composable
 fun FrameTimeline(
-    frames: List<Frame>, // FIX: Changed from List<Uri> to List<Frame>
-    selectedFrame: Frame?, // FIX: Changed from Uri? to Frame?
-    onFrameSelected: (Frame) -> Unit, // FIX: Changed from (Uri) to (Frame)
+    frames: List<Frame>,
+    selectedFrame: Frame?,
+    onFrameSelected: (Frame) -> Unit,
     onMove: (Int, Int) -> Unit
 ) {
     if (frames.isEmpty()) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(60.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp),
             contentAlignment = Alignment.Center
         ) {
             Text("No frames captured yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -259,22 +329,22 @@ fun FrameTimeline(
                 .reorderable(state)
                 .detectReorderAfterLongPress(state)
         ) {
-            items(frames, key = { it.id }) { frame -> // FIX: Use frame.id as the key
-                ReorderableItem(state, key = frame) { isDragging ->
+            items(frames, key = { it.id }) { frame ->
+                ReorderableItem(state, key = frame) {
                     Box(
                         modifier = Modifier
                             .size(width = 80.dp, height = 60.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { onFrameSelected(frame) } // FIX: Pass the whole Frame object
+                            .clickable { onFrameSelected(frame) }
                             .background(MaterialTheme.colorScheme.surface)
                             .border(
                                 2.dp,
-                                if (frame == selectedFrame) Pink_Primary else Color.Transparent, // FIX: Compare Frame objects
+                                if (frame == selectedFrame) Pink_Primary else Color.Transparent,
                                 RoundedCornerShape(8.dp)
                             )
                     ) {
                         AsyncImage(
-                            model = frame.uri, // FIX: Use frame.uri
+                            model = frame.uri,
                             contentDescription = "Captured frame",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -357,7 +427,10 @@ fun ActionButton(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            val tint =
+                if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(
+                    alpha = 0.38f
+                )
             Icon(imageVector = icon, contentDescription = text, tint = tint)
             Spacer(modifier = Modifier.width(4.dp))
             Text(
@@ -367,6 +440,24 @@ fun ActionButton(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+private fun SystemUiController(isFullScreen: Boolean) {
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        val window = (view.context as Activity).window
+        val insetsController = WindowCompat.getInsetsController(window, view)
+        LaunchedEffect(isFullScreen) {
+            if (isFullScreen) {
+                insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                insetsController.systemBarsBehavior =
+                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 }
