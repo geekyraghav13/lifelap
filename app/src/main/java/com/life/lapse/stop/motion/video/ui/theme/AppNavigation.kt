@@ -62,53 +62,49 @@ fun AppNavigation() {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
-        // This function defines the nested graph for a project
-        projectGraph(navController)
-    }
-}
+        // Nested navigation graph for projects
+        navigation(
+            startDestination = ProjectScreen.Editor.route,
+            route = Screen.Project.route
+        ) {
+            composable(
+                route = ProjectScreen.Editor.route,
+                arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController)
+                val projectId = backStackEntry.arguments?.getString("projectId")
 
-// FIX: This is the corrected way to define a nested navigation graph.
-// The `arguments` parameter has been removed from the `navigation()` call.
-fun NavGraphBuilder.projectGraph(navController: NavController) {
-    navigation(
-        startDestination = ProjectScreen.Editor.route,
-        route = Screen.Project.route
-    ) {
-        composable(
-            route = ProjectScreen.Editor.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController = navController)
-            val projectId = backStackEntry.arguments?.getString("projectId")
+                LaunchedEffect(projectId) {
+                    projectViewModel.loadProject(projectId)
+                }
 
-            LaunchedEffect(projectId) {
-                projectViewModel.loadProject(projectId)
+                EditorScreen(
+                    onNavigateBack = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Home.route) { inclusive = true }
+                        }
+                    },
+                    editorViewModel = projectViewModel,
+                    onNavigateToCamera = { navController.navigate(ProjectScreen.Camera.route) }
+                )
             }
 
-            EditorScreen(
-                onNavigateBack = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Home.route) { inclusive = true }
-                    }
-                },
-                editorViewModel = projectViewModel,
-                onNavigateToCamera = { navController.navigate(ProjectScreen.Camera.route) }
-            )
-        }
-        composable(ProjectScreen.Camera.route) { backStackEntry ->
-            val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController = navController)
-
-            CameraScreen(
-                onNavigateBack = { navController.popBackStack() },
-                projectViewModel = projectViewModel,
-                onNavigateToEditor = { navController.popBackStack() }
-            )
+            composable(ProjectScreen.Camera.route) { backStackEntry ->
+                val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController)
+                CameraScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    projectViewModel = projectViewModel,
+                    onNavigateToEditor = { navController.popBackStack() }
+                )
+            }
         }
     }
 }
 
 @Composable
-inline fun <reified T : ViewModel> NavBackStackEntry.sharedViewModel(navController: NavController): T {
+inline fun <reified T : ViewModel> NavBackStackEntry.sharedViewModel(
+    navController: NavController
+): T {
     val navGraphRoute = destination.parent?.route ?: return viewModel()
     val parentEntry = remember(this) {
         navController.getBackStackEntry(navGraphRoute)

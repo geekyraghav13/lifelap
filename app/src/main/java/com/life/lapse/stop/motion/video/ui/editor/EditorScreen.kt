@@ -64,6 +64,7 @@ fun EditorScreen(
     }
 
     if (uiState.isFullScreen) {
+        // --- FULLSCREEN MODE UI ---
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -83,6 +84,7 @@ fun EditorScreen(
             )
         }
     } else {
+        // --- NORMAL MODE UI ---
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
@@ -119,8 +121,8 @@ fun EditorScreen(
                     currentFrameIndex = uiState.currentFrameIndex,
                     isPlaying = uiState.isPlaying,
                     isFullScreen = false,
-                    showControls = true,
-                    onPlayerTap = {},
+                    showControls = true, // Controls are always shown in normal mode
+                    onPlayerTap = { /* Does nothing in normal mode */ },
                     onTogglePlayback = { editorViewModel.onTogglePlayback() },
                     onSeek = { editorViewModel.onSeekToFrame(it) },
                     onToggleFullScreen = { editorViewModel.onToggleFullScreen() }
@@ -178,8 +180,16 @@ fun AdvancedVideoPlayer(
             .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onDoubleTap = { onTogglePlayback() },
-                    onTap = { if (isFullScreen) onPlayerTap() else onTogglePlayback() }
+                    onDoubleTap = {
+                        onTogglePlayback() // Double tap → Play/Pause
+                    },
+                    onTap = {
+                        if (isFullScreen) {
+                            onPlayerTap() // Single tap in fullscreen → Show/Hide controls
+                        } else {
+                            onTogglePlayback() // Single tap in normal mode → Play/Pause
+                        }
+                    }
                 )
             }
     ) {
@@ -192,7 +202,11 @@ fun AdvancedVideoPlayer(
             )
         }
 
-        AnimatedVisibility(visible = if (isFullScreen) showControls else true, enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(
+            visible = if (isFullScreen) showControls else true,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
             Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)), startY = 300f)))
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (!isPlaying) {
