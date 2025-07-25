@@ -1,6 +1,7 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
 import android.app.Activity
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -63,7 +64,6 @@ fun EditorScreen(
     }
 
     if (uiState.isFullScreen) {
-        /** ✅ FULLSCREEN MODE UI **/
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -83,11 +83,10 @@ fun EditorScreen(
             )
         }
     } else {
-        /** ✅ NORMAL MODE UI **/
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("My Project", fontWeight = FontWeight.Bold) },
+                    title = { Text(uiState.project.title, fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
@@ -115,28 +114,20 @@ fun EditorScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
             ) {
-                /** ✅ Video Player in normal mode **/
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16 / 9f)
-                ) {
-                    AdvancedVideoPlayer(
-                        frames = uiState.frames,
-                        currentFrameIndex = uiState.currentFrameIndex,
-                        isPlaying = uiState.isPlaying,
-                        isFullScreen = false,
-                        showControls = true,
-                        onPlayerTap = { editorViewModel.onFullScreenPlayerTap() },
-                        onTogglePlayback = { editorViewModel.onTogglePlayback() },
-                        onSeek = { editorViewModel.onSeekToFrame(it) },
-                        onToggleFullScreen = { editorViewModel.onToggleFullScreen() }
-                    )
-                }
+                AdvancedVideoPlayer(
+                    frames = uiState.frames,
+                    currentFrameIndex = uiState.currentFrameIndex,
+                    isPlaying = uiState.isPlaying,
+                    isFullScreen = false,
+                    showControls = true,
+                    onPlayerTap = {},
+                    onTogglePlayback = { editorViewModel.onTogglePlayback() },
+                    onSeek = { editorViewModel.onSeekToFrame(it) },
+                    onToggleFullScreen = { editorViewModel.onToggleFullScreen() }
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                /** ✅ Timeline Section **/
                 Text("Timeline", style = MaterialTheme.typography.titleMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 FrameTimeline(
@@ -148,15 +139,13 @@ fun EditorScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                /** ✅ Playback Speed Controls **/
                 PlaybackSpeedControls(
-                    selectedSpeed = uiState.selectedSpeed,
+                    selectedSpeed = uiState.project.speed,
                     onSpeedSelected = { editorViewModel.onSpeedSelected(it) }
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                /** ✅ Frame Actions **/
                 FrameActionButtons(
                     onDelete = { editorViewModel.onDeleteFrameClicked() },
                     onDuplicate = { editorViewModel.onDuplicateFrameClicked() },
@@ -189,16 +178,8 @@ fun AdvancedVideoPlayer(
             .background(MaterialTheme.colorScheme.surface)
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onDoubleTap = {
-                        onTogglePlayback() // Double tap → Play/Pause
-                    },
-                    onTap = {
-                        if (isFullScreen) {
-                            onPlayerTap() // Single tap → Show controls
-                        } else {
-                            onTogglePlayback() // Normal mode → Tap toggles playback
-                        }
-                    }
+                    onDoubleTap = { onTogglePlayback() },
+                    onTap = { if (isFullScreen) onPlayerTap() else onTogglePlayback() }
                 )
             }
     ) {
@@ -211,90 +192,34 @@ fun AdvancedVideoPlayer(
             )
         }
 
-        AnimatedVisibility(
-            visible = if (isFullScreen) showControls else true,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                            startY = 300f
-                        )
-                    )
-            )
-
-            // Play button center overlay
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
+        AnimatedVisibility(visible = if (isFullScreen) showControls else true, enter = fadeIn(), exit = fadeOut()) {
+            Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)), startY = 300f)))
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 if (!isPlaying) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(40.dp)
-                        )
+                    Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.4f)), contentAlignment = Alignment.Center) {
+                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Play", tint = Color.White, modifier = Modifier.size(40.dp))
                     }
                 }
             }
-
-            // Bottom controls
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.Bottom
-            ) {
+            Column(modifier = Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Bottom) {
                 if (frames.size > 1) {
                     Slider(
                         value = currentFrameIndex.toFloat(),
                         onValueChange = { onSeek(it.toInt()) },
                         valueRange = 0f..(frames.size - 1).toFloat(),
                         steps = frames.size - 2,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Pink_Primary,
-                            activeTrackColor = Pink_Primary,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                        )
+                        colors = SliderDefaults.colors(thumbColor = Pink_Primary, activeTrackColor = Pink_Primary, inactiveTrackColor = Color.White.copy(alpha = 0.3f))
                     )
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     IconButton(onClick = onTogglePlayback) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White
-                        )
+                        Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = if (isPlaying) "Pause" else "Play", tint = Color.White)
                     }
                     if (frames.isNotEmpty()) {
-                        Text(
-                            text = "${currentFrameIndex + 1} / ${frames.size}",
-                            color = Color.White,
-                            fontSize = 14.sp
-                        )
+                        Text(text = "${currentFrameIndex + 1} / ${frames.size}", color = Color.White, fontSize = 14.sp)
                     }
                     IconButton(onClick = onToggleFullScreen) {
-                        Icon(
-                            imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                            contentDescription = "Fullscreen",
-                            tint = Color.White
-                        )
+                        Icon(imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = Color.White)
                     }
                 }
             }
@@ -310,25 +235,12 @@ fun FrameTimeline(
     onMove: (Int, Int) -> Unit
 ) {
     if (frames.isEmpty()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(60.dp),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.fillMaxWidth().height(60.dp), contentAlignment = Alignment.Center) {
             Text("No frames captured yet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     } else {
-        val state = rememberReorderableLazyListState(onMove = { from, to ->
-            onMove(from.index, to.index)
-        })
-        LazyRow(
-            state = state.listState,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .reorderable(state)
-                .detectReorderAfterLongPress(state)
-        ) {
+        val state = rememberReorderableLazyListState(onMove = { from, to -> onMove(from.index, to.index) })
+        LazyRow(state = state.listState, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.reorderable(state).detectReorderAfterLongPress(state)) {
             items(frames, key = { it.id }) { frame ->
                 ReorderableItem(state, key = frame) {
                     Box(
@@ -337,18 +249,9 @@ fun FrameTimeline(
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { onFrameSelected(frame) }
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(
-                                2.dp,
-                                if (frame == selectedFrame) Pink_Primary else Color.Transparent,
-                                RoundedCornerShape(8.dp)
-                            )
+                            .border(2.dp, if (frame == selectedFrame) Pink_Primary else Color.Transparent, RoundedCornerShape(8.dp))
                     ) {
-                        AsyncImage(
-                            model = frame.uri,
-                            contentDescription = "Captured frame",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
+                        AsyncImage(model = frame.uri, contentDescription = "Captured frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
                 }
             }
@@ -364,13 +267,7 @@ fun PlaybackSpeedControls(selectedSpeed: Float, onSpeedSelected: (Float) -> Unit
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val speeds = listOf(0.5f, 1f, 2f)
             speeds.forEach { speed ->
-                Button(
-                    onClick = { onSpeedSelected(speed) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedSpeed == speed) Pink_Primary else MaterialTheme.colorScheme.surface
-                    )
-                ) {
+                Button(onClick = { onSpeedSelected(speed) }, shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = if (selectedSpeed == speed) Pink_Primary else MaterialTheme.colorScheme.surface)) {
                     Text("${speed}x")
                 }
             }
@@ -379,67 +276,22 @@ fun PlaybackSpeedControls(selectedSpeed: Float, onSpeedSelected: (Float) -> Unit
 }
 
 @Composable
-fun FrameActionButtons(
-    onDelete: () -> Unit,
-    onDuplicate: () -> Unit,
-    onAdd: () -> Unit,
-    deleteEnabled: Boolean,
-    duplicateEnabled: Boolean
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ActionButton(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.Delete,
-            text = "Delete Frame",
-            onClick = onDelete,
-            enabled = deleteEnabled
-        )
-        ActionButton(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Default.ContentCopy,
-            text = "Duplicate",
-            onClick = onDuplicate,
-            enabled = duplicateEnabled
-        )
+fun FrameActionButtons(onDelete: () -> Unit, onDuplicate: () -> Unit, onAdd: () -> Unit, deleteEnabled: Boolean, duplicateEnabled: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Delete, text = "Delete Frame", onClick = onDelete, enabled = deleteEnabled)
+        ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.ContentCopy, text = "Duplicate", onClick = onDuplicate, enabled = duplicateEnabled)
         ActionButton(modifier = Modifier.weight(1f), icon = Icons.Default.Add, text = "Add Frame", onClick = onAdd)
     }
 }
 
 @Composable
-fun ActionButton(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true
-) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val tint =
-                if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = 0.38f
-                )
+fun ActionButton(modifier: Modifier = Modifier, icon: ImageVector, text: String, onClick: () -> Unit, enabled: Boolean = true) {
+    TextButton(onClick = onClick, modifier = modifier, enabled = enabled, contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            val tint = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             Icon(imageVector = icon, contentDescription = text, tint = tint)
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text,
-                color = tint,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Text(text, color = tint, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -453,8 +305,7 @@ private fun SystemUiController(isFullScreen: Boolean) {
         LaunchedEffect(isFullScreen) {
             if (isFullScreen) {
                 insetsController.hide(WindowInsetsCompat.Type.systemBars())
-                insetsController.systemBarsBehavior =
-                    WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
                 insetsController.show(WindowInsetsCompat.Type.systemBars())
             }

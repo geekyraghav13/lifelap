@@ -47,7 +47,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.ui.editor.EditorViewModel
-import com.life.lapse.stop.motion.video.ui.editor.Frame // FIX: Import the Frame data class
+import com.life.lapse.stop.motion.video.ui.editor.Frame
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 import java.io.File
 import java.text.SimpleDateFormat
@@ -110,7 +110,7 @@ fun CameraScreen(
                         CameraSelector.DEFAULT_BACK_CAMERA
                     }
                 },
-                capturedImages = uiState.frames, // This is now List<Frame>
+                capturedImages = uiState.frames,
                 onDoneClick = onNavigateToEditor
             )
         } else {
@@ -186,7 +186,7 @@ fun CameraControls(
     onNavigateBack: () -> Unit,
     onCaptureClick: () -> Unit,
     onFlipCameraClick: () -> Unit,
-    capturedImages: List<Frame>, // FIX: Changed from List<Uri> to List<Frame>
+    capturedImages: List<Frame>,
     onDoneClick: () -> Unit
 ) {
     Column(modifier = modifier) {
@@ -212,7 +212,6 @@ fun CameraControls(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 reverseLayout = true
             ) {
-                // FIX: Iterate over the List<Frame> and use frame.uri
                 items(capturedImages, key = { it.id }) { frame ->
                     AsyncImage(model = frame.uri, contentDescription = "Captured frame", modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                 }
@@ -230,7 +229,6 @@ fun CameraControls(
         ) {
             Box(modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)).border(width = 1.dp, color = if (capturedImages.isNotEmpty()) Color.White else Color.Transparent, shape = RoundedCornerShape(8.dp))) {
                 if (capturedImages.isNotEmpty()) {
-                    // FIX: Use .last().uri to get the image path
                     AsyncImage(model = capturedImages.last().uri, contentDescription = "Last captured frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 }
             }

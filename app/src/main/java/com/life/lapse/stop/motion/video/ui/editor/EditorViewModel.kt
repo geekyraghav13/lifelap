@@ -1,9 +1,13 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
+import android.app.Application
 import android.content.Context
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.core.net.toUri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.life.lapse.stop.motion.video.data.model.Project
+import com.life.lapse.stop.motion.video.data.repository.ProjectRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,56 +23,61 @@ data class Frame(
 )
 
 data class ProjectUiState(
+    val project: Project = Project(),
     val frames: List<Frame> = emptyList(),
     val selectedFrame: Frame? = null,
-    val selectedSpeed: Float = 1.0f,
     val isPlaying: Boolean = false,
     val currentFrameIndex: Int = 0,
     val exportResult: String? = null,
     val isFullScreen: Boolean = false,
-    // NEW: State to control visibility of player controls in fullscreen
     val showFullScreenControls: Boolean = true
 )
 
-class EditorViewModel : ViewModel() {
+class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val projectRepository = ProjectRepository(application)
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState = _uiState.asStateFlow()
     private var playbackJob: Job? = null
-    private var hideControlsJob: Job? = null // NEW: Job to manage auto-hiding
+    private var hideControlsJob: Job? = null
 
-    fun onExportClicked(context: Context) {
-        if (_uiState.value.frames.isEmpty()) {
-            _uiState.update { it.copy(exportResult = "Error: No frames to export.") }
+    fun loadProject(projectId: String?) {
+        if (projectId == null) {
+            val newProject = Project()
+            _uiState.value = ProjectUiState(project = newProject)
+            projectRepository.saveProject(newProject)
             return
         }
-        _uiState.update { it.copy(exportResult = "Export feature is coming soon!") }
+        viewModelScope.launch {
+            val project = projectRepository.loadProject(projectId) ?: Project()
+            val frames = project.frameUris.map { Frame(uri = it.toUri()) }
+            _uiState.value = ProjectUiState(
+                project = project,
+                frames = frames,
+                selectedFrame = frames.firstOrNull()
+            )
+        }
     }
 
-    fun clearExportResult() {
-        _uiState.update { it.copy(exportResult = null) }
+    private fun saveProject() {
+        viewModelScope.launch {
+            val currentState = _uiState.value
+            val updatedProject = currentState.project.copy(
+                frameUris = currentState.frames.map { it.uri.toString() },
+                dateModified = System.currentTimeMillis()
+            )
+            _uiState.update { it.copy(project = updatedProject) }
+            projectRepository.saveProject(updatedProject)
+        }
     }
 
     fun addFrame(uri: Uri) {
         val newFrame = Frame(uri = uri)
         _uiState.update { currentState ->
-            currentState.copy(
-                frames = currentState.frames + newFrame,
-                selectedFrame = newFrame
-            )
+            val newFrames = currentState.frames + newFrame
+            currentState.copy(frames = newFrames, selectedFrame = newFrame)
         }
-    }
-
-    fun onSpeedSelected(speed: Float) {
-        _uiState.update { it.copy(selectedSpeed = speed) }
-    }
-
-    fun onTogglePlayback() {
-        if (_uiState.value.isPlaying) {
-            pausePlayback()
-        } else {
-            startPlayback()
-        }
+        saveProject()
     }
 
     fun onFrameSelected(frame: Frame) {
@@ -81,16 +90,10 @@ class EditorViewModel : ViewModel() {
             val currentFrames = currentState.frames
             val newFrames = currentFrames.toMutableList().apply { remove(selectedFrame) }
             val deletedIndex = currentFrames.indexOf(selectedFrame)
-            val newSelectedFrame = if (newFrames.isEmpty()) {
-                null
-            } else {
-                newFrames.getOrNull(deletedIndex.coerceAtMost(newFrames.size - 1))
-            }
-            currentState.copy(
-                frames = newFrames,
-                selectedFrame = newSelectedFrame
-            )
+            val newSelectedFrame = if (newFrames.isEmpty()) null else newFrames.getOrNull(deletedIndex.coerceAtMost(newFrames.size - 1))
+            currentState.copy(frames = newFrames, selectedFrame = newSelectedFrame)
         }
+        saveProject()
     }
 
     fun onDuplicateFrameClicked() {
@@ -100,85 +103,75 @@ class EditorViewModel : ViewModel() {
             val selectedIndex = currentFrames.indexOf(selectedFrame)
             if (selectedIndex == -1) return@update currentState
             val newFrame = Frame(uri = selectedFrame.uri)
-            val newFrames = currentFrames.toMutableList().apply {
-                add(selectedIndex + 1, newFrame)
-            }
-            currentState.copy(
-                frames = newFrames,
-                selectedFrame = newFrame
-            )
+            val newFrames = currentFrames.toMutableList().apply { add(selectedIndex + 1, newFrame) }
+            currentState.copy(frames = newFrames, selectedFrame = newFrame)
         }
+        saveProject()
     }
 
     fun onMoveFrame(from: Int, to: Int) {
         _uiState.update { currentState ->
-            val reorderedFrames = currentState.frames.toMutableList().apply {
-                add(to, removeAt(from))
-            }
+            val reorderedFrames = currentState.frames.toMutableList().apply { add(to, removeAt(from)) }
             currentState.copy(frames = reorderedFrames)
         }
-    }
-
-    fun onSeekToFrame(frameIndex: Int) {
-        pausePlayback()
-        _uiState.update { it.copy(currentFrameIndex = frameIndex) }
+        saveProject()
     }
 
     fun onToggleFullScreen() {
         val isEnteringFullScreen = !_uiState.value.isFullScreen
         _uiState.update { it.copy(isFullScreen = isEnteringFullScreen, showFullScreenControls = true) }
         if (isEnteringFullScreen) {
-            // When entering fullscreen, start the timer to hide controls
             scheduleHideControls()
         } else {
-            // When exiting, cancel any pending hide operations
             hideControlsJob?.cancel()
         }
     }
 
-    // NEW: When tapping the screen in fullscreen, show controls and reset the timer
     fun onFullScreenPlayerTap() {
         if (!_uiState.value.isFullScreen) return
-
-        if (_uiState.value.showFullScreenControls) {
-            // If controls are already showing, do nothing
-            return
+        val currentlyVisible = _uiState.value.showFullScreenControls
+        _uiState.update { it.copy(showFullScreenControls = !currentlyVisible) }
+        if (!currentlyVisible) {
+            scheduleHideControls()
+        } else {
+            hideControlsJob?.cancel()
         }
-
-        _uiState.update { it.copy(showFullScreenControls = true) }
-        scheduleHideControls()
     }
 
     private fun scheduleHideControls() {
         hideControlsJob?.cancel()
         hideControlsJob = viewModelScope.launch {
-            delay(3000) // Wait for 3 seconds
+            delay(3000)
             _uiState.update { it.copy(showFullScreenControls = false) }
         }
     }
 
+    fun onExportClicked(context: Context) {
+        _uiState.update { it.copy(exportResult = "Export feature is coming soon!") }
+    }
+    fun clearExportResult() { _uiState.update { it.copy(exportResult = null) } }
+    fun onSpeedSelected(speed: Float) {
+        _uiState.update { it.copy(project = it.project.copy(speed = speed)) }
+        saveProject()
+    }
+    fun onTogglePlayback() { if (_uiState.value.isPlaying) pausePlayback() else startPlayback() }
+    fun onSeekToFrame(frameIndex: Int) {
+        pausePlayback()
+        _uiState.update { it.copy(currentFrameIndex = frameIndex) }
+    }
     private fun startPlayback() {
         if (_uiState.value.frames.isEmpty()) return
         _uiState.update { it.copy(isPlaying = true) }
         playbackJob = viewModelScope.launch {
             while (isActive) {
-                val frameDuration = (1000 / _uiState.value.selectedSpeed).toLong()
+                val frameDuration = (1000 / (_uiState.value.project.speed)).toLong()
                 delay(frameDuration)
-                _uiState.update { currentState ->
-                    val nextIndex = (currentState.currentFrameIndex + 1) % currentState.frames.size
-                    currentState.copy(currentFrameIndex = nextIndex)
-                }
+                _uiState.update { cs -> cs.copy(currentFrameIndex = (cs.currentFrameIndex + 1) % cs.frames.size) }
             }
         }
     }
-
     private fun pausePlayback() {
         playbackJob?.cancel()
         _uiState.update { it.copy(isPlaying = false) }
-    }
-
-    fun clearProject() {
-        pausePlayback()
-        _uiState.value = ProjectUiState()
     }
 }

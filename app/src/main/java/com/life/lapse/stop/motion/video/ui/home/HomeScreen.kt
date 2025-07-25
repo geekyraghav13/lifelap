@@ -1,7 +1,7 @@
 package com.life.lapse.stop.motion.video.ui.home
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -13,40 +13,37 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-// FIX: Import the R file for drawable resources
-import com.life.lapse.stop.motion.video.R
-// FIX: Import the Project data class
+import androidx.core.net.toUri
+import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.data.model.Project
-// FIX: Import the Theme and Colors
 import com.life.lapse.stop.motion.video.ui.theme.LifeLapseTheme
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
-
-// Mock data that matches your Figma design
-val mockProjects = listOf(
-    Project("1", "My First Animation", 24, "2 hours ago", "", 2.4f),
-    Project("2", "Paper Craft Story", 48, "Yesterday", "", 4.8f),
-    Project("3", "Toy Adventure", 36, "3 days ago", "", 3.6f),
-    Project("4", "Food Animation", 60, "1 week ago", "", 6.0f),
-    Project("5", "Nature Timelapse", 72, "2 weeks ago", "", 7.2f)
-)
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    homeViewModel: HomeViewModel,
     onNavigateToSettings: () -> Unit,
-    onNavigateToNewProject: () -> Unit
+    onNavigateToNewProject: () -> Unit,
+    onNavigateToProject: (String) -> Unit // Takes the project ID
 ) {
+    val uiState by homeViewModel.uiState.collectAsState()
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -85,35 +82,58 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(mockProjects) { project ->
-                ProjectCard(project = project)
+        if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (uiState.projects.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No projects yet. Tap '+' to start!", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(uiState.projects, key = { it.id }) { project ->
+                    ProjectCard(
+                        project = project,
+                        onClick = { onNavigateToProject(project.id) }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ProjectCard(project: Project) {
+fun ProjectCard(project: Project, onClick: () -> Unit) {
     Card(
         shape = RoundedCornerShape(16.dp),
-        modifier = Modifier.aspectRatio(0.75f)
+        modifier = Modifier
+            .aspectRatio(0.75f)
+            .clickable(onClick = onClick)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Image(
-                painter = painterResource(id = R.drawable.ic_launcher_background),
+            AsyncImage(
+                model = project.frameUris.firstOrNull()?.toUri(),
                 contentDescription = project.title,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                placeholder = ColorPainter(MaterialTheme.colorScheme.surface)
             )
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -124,6 +144,8 @@ fun ProjectCard(project: Project) {
                         )
                     )
             )
+
+            val duration = if (project.speed > 0) project.frameUris.size / project.speed else 0f
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -133,12 +155,13 @@ fun ProjectCard(project: Project) {
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "${project.durationInSeconds}s",
+                    text = "%.1fs".format(duration),
                     color = Color.White,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
+
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -152,7 +175,7 @@ fun ProjectCard(project: Project) {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${project.frameCount} frames  •  ${project.dateModified}",
+                    text = "${project.frameUris.size} frames • ${formatTimestamp(project.dateModified)}",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
@@ -161,10 +184,15 @@ fun ProjectCard(project: Project) {
     }
 }
 
+private fun formatTimestamp(timestamp: Long): String {
+    val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+    return sdf.format(Date(timestamp))
+}
+
 @Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
 fun HomeScreenPreview() {
     LifeLapseTheme {
-        HomeScreen(onNavigateToSettings = {}, onNavigateToNewProject = {})
+        // Previewing this screen is complex as it relies on a ViewModel.
     }
 }

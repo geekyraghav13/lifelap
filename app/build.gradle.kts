@@ -72,15 +72,11 @@ dependencies {
     // Coil for Image Loading
     implementation("io.coil-kt:coil-compose:2.6.0")
 
-    // Media3 (Temporarily disabled for stability)
-    // val media3Version = "1.3.1"
-    // implementation("androidx.media3:media3-transformer:$media3Version")
-    // implementation("androidx.media3:media3-exoplayer:$media3Version")
-    // implementation("androidx.media3:media3-common:$media3Version")
-    // implementation("androidx.media3:media3-datasource:$media3Version")
-
-    // Library for reorderable lists
+    // Reorderable lists
     implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
+
+    // Gson for saving and loading project data
+    implementation("com.google.code.gson:gson:2.10.1")
 
 
     // Testing
