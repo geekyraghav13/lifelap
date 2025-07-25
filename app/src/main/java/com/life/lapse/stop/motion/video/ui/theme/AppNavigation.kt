@@ -55,7 +55,9 @@ fun AppNavigation() {
             EditorScreen(
                 onNavigateBack = { navController.popBackStack() },
                 // Pass the SAME shared ViewModel to the EditorScreen
-                editorViewModel = sharedProjectViewModel
+                editorViewModel = sharedProjectViewModel,
+                // NEW: Add navigation from Editor back to Camera
+                onNavigateToCamera = { navController.navigate(Screen.Camera.route) }
             )
         }
     }

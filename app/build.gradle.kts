@@ -72,13 +72,16 @@ dependencies {
     // Coil for Image Loading
     implementation("io.coil-kt:coil-compose:2.6.0")
 
-    // Media3 Transformer for video exporting
-    val media3Version = "1.3.1"
-    implementation("androidx.media3:media3-transformer:$media3Version")
-    implementation("androidx.media3:media3-common:$media3Version")
+    // Media3 (Temporarily disabled for stability)
+    // val media3Version = "1.3.1"
+    // implementation("androidx.media3:media3-transformer:$media3Version")
+    // implementation("androidx.media3:media3-exoplayer:$media3Version")
+    // implementation("androidx.media3:media3-common:$media3Version")
+    // implementation("androidx.media3:media3-datasource:$media3Version")
 
-    // REMOVED: The problematic Accompanist library is now gone.
-    // implementation("com.google.accompanist:accompanist-systemuicontroller:0.34.0")
+    // Library for reorderable lists
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
+
 
     // Testing
     testImplementation("junit:junit:4.13.2")

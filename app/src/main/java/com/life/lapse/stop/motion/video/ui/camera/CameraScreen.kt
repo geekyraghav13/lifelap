@@ -1,6 +1,5 @@
 package com.life.lapse.stop.motion.video.ui.camera
 
-// --------- CRITICAL: REQUIRED IMPORTS BLOCK ---------
 import android.Manifest
 import android.content.Context
 import android.net.Uri
@@ -48,22 +47,21 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
 import com.life.lapse.stop.motion.video.ui.editor.EditorViewModel
+import com.life.lapse.stop.motion.video.ui.editor.Frame // FIX: Import the Frame data class
 import com.life.lapse.stop.motion.video.ui.theme.Pink_Primary
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executor
-// --------- END OF IMPORTS BLOCK ---------
 
 @Composable
 fun CameraScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEditor: () -> Unit,
-    projectViewModel: EditorViewModel // Receives the shared ViewModel from AppNavigation
+    projectViewModel: EditorViewModel
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // Get the list of frames from the shared ViewModel
     val uiState by projectViewModel.uiState.collectAsState()
 
     var hasPermission by remember { mutableStateOf(false) }
@@ -72,7 +70,6 @@ fun CameraScreen(
         onResult = { isGranted -> hasPermission = isGranted }
     )
 
-    // Manage camera selector locally within this screen for now
     var cameraSelector by remember { mutableStateOf(CameraSelector.DEFAULT_BACK_CAMERA) }
 
     LaunchedEffect(Unit) {
@@ -98,7 +95,6 @@ fun CameraScreen(
                         imageCapture = imageCapture,
                         executor = ContextCompat.getMainExecutor(context),
                         onImageCaptured = { uri ->
-                            // Add the new photo to the shared ViewModel
                             projectViewModel.addFrame(uri)
                             Toast.makeText(context, "Frame Added!", Toast.LENGTH_SHORT).show()
                         },
@@ -108,14 +104,13 @@ fun CameraScreen(
                     )
                 },
                 onFlipCameraClick = {
-                    // Update the local camera selector state
                     cameraSelector = if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
                         CameraSelector.DEFAULT_FRONT_CAMERA
                     } else {
                         CameraSelector.DEFAULT_BACK_CAMERA
                     }
                 },
-                capturedImages = uiState.frames, // Display frames from the shared ViewModel
+                capturedImages = uiState.frames, // This is now List<Frame>
                 onDoneClick = onNavigateToEditor
             )
         } else {
@@ -191,7 +186,7 @@ fun CameraControls(
     onNavigateBack: () -> Unit,
     onCaptureClick: () -> Unit,
     onFlipCameraClick: () -> Unit,
-    capturedImages: List<Uri>,
+    capturedImages: List<Frame>, // FIX: Changed from List<Uri> to List<Frame>
     onDoneClick: () -> Unit
 ) {
     Column(modifier = modifier) {
@@ -217,8 +212,9 @@ fun CameraControls(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 reverseLayout = true
             ) {
-                items(capturedImages) { uri ->
-                    AsyncImage(model = uri, contentDescription = "Captured frame", modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                // FIX: Iterate over the List<Frame> and use frame.uri
+                items(capturedImages, key = { it.id }) { frame ->
+                    AsyncImage(model = frame.uri, contentDescription = "Captured frame", modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
                 }
             }
         } else {
@@ -234,7 +230,8 @@ fun CameraControls(
         ) {
             Box(modifier = Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)).border(width = 1.dp, color = if (capturedImages.isNotEmpty()) Color.White else Color.Transparent, shape = RoundedCornerShape(8.dp))) {
                 if (capturedImages.isNotEmpty()) {
-                    AsyncImage(model = capturedImages.last(), contentDescription = "Last captured frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    // FIX: Use .last().uri to get the image path
+                    AsyncImage(model = capturedImages.last().uri, contentDescription = "Last captured frame", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 }
             }
 
