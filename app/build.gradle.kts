@@ -79,7 +79,9 @@ dependencies {
 
     // Gson for saving and loading project data
     implementation("com.google.code.gson:gson:2.10.1")
+    // Inside app/build.gradle.kts dependencies block
 
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

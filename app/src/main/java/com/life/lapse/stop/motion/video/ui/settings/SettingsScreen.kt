@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -16,29 +17,46 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.life.lapse.stop.motion.video.data.repository.AppTheme
+import com.life.lapse.stop.motion.video.data.repository.ExportQuality
 import com.life.lapse.stop.motion.video.ui.theme.LifeLapseTheme
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    settingsViewModel: SettingsViewModel = viewModel()
 ) {
+    val uiState by settingsViewModel.uiState.collectAsState()
+
+    if (uiState.isThemeDialogOpen) {
+        ThemeSelectionDialog(
+            currentTheme = uiState.appTheme,
+            onThemeSelected = { settingsViewModel.onThemeChanged(it) },
+            onDismiss = { settingsViewModel.showThemeDialog(false) }
+        )
+    }
+
+    if (uiState.isQualityDialogOpen) {
+        QualitySelectionDialog(
+            currentQuality = uiState.exportQuality,
+            onQualitySelected = { settingsViewModel.onQualityChanged(it) },
+            onDismiss = { settingsViewModel.showQualityDialog(false) }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -73,9 +91,11 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Brightness4,
                 title = "Theme",
-                value = "Dark"
+                // ✅ FIX: Using modern, warning-free way to format text
+                value = uiState.appTheme.name.replace("_", " ").lowercase()
+                    .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
             ) {
-                // TODO: Handle theme change
+                settingsViewModel.showThemeDialog(true)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -89,9 +109,13 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.HighQuality,
                 title = "Default Quality",
-                value = "1080p"
+                value = when (uiState.exportQuality) {
+                    ExportQuality.P720 -> "720p"
+                    ExportQuality.P1080 -> "1080p"
+                    ExportQuality.P4K -> "4K"
+                }
             ) {
-                // TODO: Handle quality change
+                settingsViewModel.showQualityDialog(true)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -157,6 +181,95 @@ fun SettingsItem(
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+private fun ThemeSelectionDialog(
+    currentTheme: AppTheme,
+    onThemeSelected: (AppTheme) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose Theme") },
+        text = {
+            Column {
+                // ✅ FIX: Using .entries instead of .values()
+                AppTheme.entries.forEach { theme ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = (theme == currentTheme),
+                                onClick = { onThemeSelected(theme) }
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (theme == currentTheme),
+                            onClick = { onThemeSelected(theme) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // ✅ FIX: Using modern, warning-free way to format text
+                        Text(text = theme.name.replace("_", " ").lowercase()
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun QualitySelectionDialog(
+    currentQuality: ExportQuality,
+    onQualitySelected: (ExportQuality) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val qualityMap = mapOf(
+        ExportQuality.P720 to "720p (HD)",
+        ExportQuality.P1080 to "1080p (Full HD)",
+        ExportQuality.P4K to "4K (Ultra HD)"
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Choose Export Quality") },
+        text = {
+            Column {
+                // ✅ FIX: Using .entries instead of .values()
+                ExportQuality.entries.forEach { quality ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = (quality == currentQuality),
+                                onClick = { onQualitySelected(quality) }
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = (quality == currentQuality),
+                            onClick = { onQualitySelected(quality) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = qualityMap[quality] ?: "")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF121212)

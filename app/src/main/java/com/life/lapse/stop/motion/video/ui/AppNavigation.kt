@@ -19,6 +19,7 @@ import com.life.lapse.stop.motion.video.ui.editor.EditorViewModel
 import com.life.lapse.stop.motion.video.ui.home.HomeScreen
 import com.life.lapse.stop.motion.video.ui.home.HomeViewModel
 import com.life.lapse.stop.motion.video.ui.settings.SettingsScreen
+import com.life.lapse.stop.motion.video.ui.settings.SettingsViewModel
 import java.util.UUID
 
 object NavRoutes {
@@ -49,8 +50,13 @@ fun AppNavigation() {
             )
         }
 
+// Inside AppNavigation.kt
         composable(NavRoutes.SETTINGS) {
-            SettingsScreen(onNavigateBack = { navController.popBackStack() })
+            val settingsViewModel: SettingsViewModel = viewModel()
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                settingsViewModel = settingsViewModel
+            )
         }
 
         navigation(
