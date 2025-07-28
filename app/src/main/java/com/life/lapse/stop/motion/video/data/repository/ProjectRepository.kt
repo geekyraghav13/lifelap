@@ -5,50 +5,44 @@ import com.google.gson.Gson
 import com.life.lapse.stop.motion.video.data.model.Project
 import java.io.File
 
-class ProjectRepository(private val context: Context) {
+class ProjectRepository(context: Context) {
 
+    private val projectsDir = File(context.filesDir, "projects").apply { mkdirs() }
     private val gson = Gson()
-    private val projectsDir = File(context.filesDir, "projects")
-
-    init {
-        if (!projectsDir.exists()) {
-            projectsDir.mkdirs()
-        }
-    }
 
     fun saveProject(project: Project) {
-        val projectFile = File(projectsDir, "${project.id}.json")
-        projectFile.writeText(gson.toJson(project))
+        val file = File(projectsDir, "${project.id}.json")
+        file.writeText(gson.toJson(project))
+    }
+
+    fun loadProject(projectId: String): Project? {
+        val file = File(projectsDir, "$projectId.json")
+        return if (file.exists()) {
+            gson.fromJson(file.readText(), Project::class.java)
+        } else {
+            null
+        }
     }
 
     fun loadProjects(): List<Project> {
         return projectsDir.listFiles { _, name -> name.endsWith(".json") }
             ?.mapNotNull { file ->
                 try {
-                    val json = file.readText()
-                    gson.fromJson(json, Project::class.java)
+                    gson.fromJson(file.readText(), Project::class.java)
                 } catch (e: Exception) {
-                    null
+                    null // Ignore corrupted files
                 }
             }
-            ?.sortedByDescending { it.dateModified } ?: emptyList()
+            ?.sortedByDescending { it.dateModified }
+            ?: emptyList()
     }
 
-    fun loadProject(projectId: String): Project? {
-        val projectFile = File(projectsDir, "$projectId.json")
-        if (!projectFile.exists()) return null
-        return try {
-            val json = projectFile.readText()
-            gson.fromJson(json, Project::class.java)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
+    // ✅ This new function handles deleting the project file
     fun deleteProject(projectId: String) {
-        val projectFile = File(projectsDir, "$projectId.json")
-        if (projectFile.exists()) {
-            projectFile.delete()
+        val file = File(projectsDir, "$projectId.json")
+        if (file.exists()) {
+            file.delete()
         }
+        // Note: This does not delete the image frame files, only the project data.
     }
 }

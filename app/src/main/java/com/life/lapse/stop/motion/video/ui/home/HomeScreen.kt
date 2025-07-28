@@ -1,7 +1,8 @@
 package com.life.lapse.stop.motion.video.ui.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -10,12 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,8 +46,29 @@ fun HomeScreen(
     onNavigateToProject: (String) -> Unit // Takes the project ID
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
+    val projectToDelete by homeViewModel.projectToDelete.collectAsState()
+    // ✅ ADDED: Get the project to rename from the ViewModel
+    val projectToRename by homeViewModel.projectToRename.collectAsState()
 
-    // ✅ FIX: This block refreshes the project list every time the screen appears.
+    // Show the delete dialog when needed
+    projectToDelete?.let { project ->
+        DeleteConfirmationDialog(
+            project = project,
+            onConfirm = { homeViewModel.onDeleteConfirm() },
+            onDismiss = { homeViewModel.onDeleteDialogDismiss() }
+        )
+    }
+
+    // ✅ ADDED: Show the rename dialog when needed
+    projectToRename?.let { project ->
+        RenameProjectDialog(
+            project = project,
+            onConfirm = { newTitle -> homeViewModel.onRenameConfirm(newTitle) },
+            onDismiss = { homeViewModel.onRenameDialogDismiss() }
+        )
+    }
+
+    // This block refreshes the project list every time the screen appears.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -127,7 +147,10 @@ fun HomeScreen(
                 items(uiState.projects, key = { it.id }) { project ->
                     ProjectCard(
                         project = project,
-                        onClick = { onNavigateToProject(project.id) }
+                        onClick = { onNavigateToProject(project.id) },
+                        onLongClick = { homeViewModel.onDeleteRequest(project) },
+                        // ✅ ADDED: Call the ViewModel on rename icon click
+                        onRenameClick = { homeViewModel.onRenameRequest(project) }
                     )
                 }
             }
@@ -136,12 +159,83 @@ fun HomeScreen(
 }
 
 @Composable
-fun ProjectCard(project: Project, onClick: () -> Unit) {
+fun DeleteConfirmationDialog(
+    project: Project,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete Project") },
+        text = { Text("Are you sure you want to permanently delete '${project.title}'?") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// ✅ ADDED: New dialog composable for renaming
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RenameProjectDialog(
+    project: Project,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember(project) { mutableStateOf(project.title) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename Project") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Project name") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(text) },
+                enabled = text.isNotBlank()
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ProjectCard(
+    project: Project,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    // ✅ ADDED: New callback for rename button
+    onRenameClick: () -> Unit
+) {
     Card(
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .aspectRatio(0.75f)
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -163,21 +257,35 @@ fun ProjectCard(project: Project, onClick: () -> Unit) {
                     )
             )
 
-            val duration = if (project.speed > 0) project.frameUris.size / project.speed else 0f
-            Box(
+            // ✅ ADDED: Box to hold the menu and duration text
+            Row(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .align(Alignment.TopEnd)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.Black.copy(alpha = 0.5f))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                val duration = if (project.speed > 0) project.frameUris.size / project.speed else 0f
                 Text(
                     text = "%.1fs".format(duration),
                     color = Color.White,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
                 )
+
+                // ✅ ADDED: Menu icon button for rename
+                IconButton(onClick = onRenameClick) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = Color.White
+                    )
+                }
             }
 
             Column(
