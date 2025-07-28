@@ -1,4 +1,4 @@
-package com.life.lapse.stop.motion.video.ui // Correct package for the ui folder
+package com.life.lapse.stop.motion.video.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -21,53 +21,46 @@ import com.life.lapse.stop.motion.video.ui.home.HomeViewModel
 import com.life.lapse.stop.motion.video.ui.settings.SettingsScreen
 import java.util.UUID
 
-// Defines the top-level navigation routes
-sealed class Screen(val route: String) {
-    object Home : Screen("home")
-    object Settings : Screen("settings")
-    object Project : Screen("project/{projectId}")
-    // The "createRoute" function is no longer needed and has been removed.
-}
-
-// Defines the screens within the nested project graph
-sealed class ProjectScreen(val route: String) {
-    object Editor : ProjectScreen("editor")
-    object Camera : ProjectScreen("camera")
+object NavRoutes {
+    const val HOME = "home"
+    const val SETTINGS = "settings"
+    const val PROJECT_GRAPH = "project_graph"
+    const val EDITOR = "editor/{projectId}"
+    const val CAMERA = "camera/{projectId}"
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = Screen.Home.route) {
-        composable(Screen.Home.route) {
+    NavHost(navController = navController, startDestination = NavRoutes.HOME) {
+        composable(NavRoutes.HOME) {
             val homeViewModel: HomeViewModel = viewModel()
             HomeScreen(
                 homeViewModel = homeViewModel,
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onNavigateToNewProject = {
                     val newProjectId = UUID.randomUUID().toString()
-                    // Navigate to the camera screen for the new project
-                    navController.navigate("project/$newProjectId/camera")
+                    navController.navigate("camera/$newProjectId")
                 },
                 onNavigateToProject = { projectId ->
-                    // For existing projects, navigate to the editor
-                    navController.navigate("project/$projectId/editor")
+                    navController.navigate("editor/$projectId")
                 }
             )
         }
 
-        composable(Screen.Settings.route) {
+        composable(NavRoutes.SETTINGS) {
             SettingsScreen(onNavigateBack = { navController.popBackStack() })
         }
 
-        // The navigation argument is defined on the GRAPH, not an individual screen.
         navigation(
-            startDestination = ProjectScreen.Editor.route,
-            route = Screen.Project.route,
-            arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            startDestination = NavRoutes.EDITOR,
+            route = NavRoutes.PROJECT_GRAPH
         ) {
-            composable(route = ProjectScreen.Editor.route) { backStackEntry ->
+            composable(
+                route = NavRoutes.EDITOR,
+                arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            ) { backStackEntry ->
                 val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController)
                 val projectId = backStackEntry.arguments?.getString("projectId")
 
@@ -77,20 +70,25 @@ fun AppNavigation() {
 
                 EditorScreen(
                     onNavigateBack = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Home.route) { inclusive = true }
+                        navController.navigate(NavRoutes.HOME) {
+                            popUpTo(NavRoutes.HOME) { inclusive = true }
                         }
                     },
                     editorViewModel = projectViewModel,
-                    onNavigateToCamera = { navController.navigate(ProjectScreen.Camera.route) }
+                    onNavigateToCamera = {
+                        val currentProjectId = projectViewModel.uiState.value.project.id
+                        navController.navigate("camera/$currentProjectId")
+                    }
                 )
             }
 
-            composable(route = ProjectScreen.Camera.route) { backStackEntry ->
+            composable(
+                route = NavRoutes.CAMERA,
+                arguments = listOf(navArgument("projectId") { type = NavType.StringType })
+            ) { backStackEntry ->
                 val projectViewModel: EditorViewModel = backStackEntry.sharedViewModel(navController)
                 val projectId = backStackEntry.arguments?.getString("projectId")
 
-                // CameraScreen now also loads the project, making the "New Project" flow work.
                 LaunchedEffect(projectId) {
                     projectViewModel.loadProject(projectId)
                 }
@@ -98,7 +96,15 @@ fun AppNavigation() {
                 CameraScreen(
                     onNavigateBack = { navController.popBackStack() },
                     projectViewModel = projectViewModel,
-                    onNavigateToEditor = { navController.popBackStack() }
+                    // ✅ FIX: This now navigates to the editor and cleans up the back stack.
+                    onNavigateToEditor = {
+                        val currentProjectId = projectViewModel.uiState.value.project.id
+                        navController.navigate("editor/$currentProjectId") {
+                            // This ensures pressing "back" from the editor goes home,
+                            // not back to the camera.
+                            popUpTo(NavRoutes.HOME)
+                        }
+                    }
                 )
             }
         }
@@ -109,7 +115,7 @@ fun AppNavigation() {
 inline fun <reified T : ViewModel> NavBackStackEntry.sharedViewModel(
     navController: NavController
 ): T {
-    val navGraphRoute = destination.parent?.route ?: return viewModel()
+    val navGraphRoute = NavRoutes.PROJECT_GRAPH
     val parentEntry = remember(this) {
         navController.getBackStackEntry(navGraphRoute)
     }

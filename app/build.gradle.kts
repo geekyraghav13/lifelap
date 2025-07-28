@@ -1,17 +1,16 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.life.lapse.stop.motion.video"
-    compileSdk = 35
+    compileSdk = 34 // Use stable SDK version 34
 
     defaultConfig {
         applicationId = "com.life.lapse.stop.motion.video"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 34 // Match this with compileSdk
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -38,6 +37,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.11"
     }
     packaging {
         resources {
