@@ -1,13 +1,13 @@
 package com.life.lapse.stop.motion.video.ui.editor
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.life.lapse.stop.motion.video.data.model.Project
 import com.life.lapse.stop.motion.video.data.repository.ProjectRepository
+import com.life.lapse.stop.motion.video.export.VideoExporter
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,10 +36,54 @@ data class ProjectUiState(
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val projectRepository = ProjectRepository(application)
+    private val videoExporter = VideoExporter(application)
+
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState = _uiState.asStateFlow()
     private var playbackJob: Job? = null
     private var hideControlsJob: Job? = null
+
+    fun onExportClicked() {
+        val project = _uiState.value.project
+        videoExporter.export(project) { isSuccess, message ->
+            _uiState.update { it.copy(exportResult = message) }
+        }
+    }
+
+    fun clearExportResult() {
+        _uiState.update { it.copy(exportResult = null) }
+    }
+
+    fun onSpeedSelected(speed: Float) {
+        _uiState.update { it.copy(project = it.project.copy(speed = speed)) }
+        saveProject()
+    }
+
+    fun onTogglePlayback() {
+        if (_uiState.value.isPlaying) pausePlayback() else startPlayback()
+    }
+
+    fun onSeekToFrame(frameIndex: Int) {
+        pausePlayback()
+        _uiState.update { it.copy(currentFrameIndex = frameIndex) }
+    }
+
+    private fun startPlayback() {
+        if (_uiState.value.frames.isEmpty()) return
+        _uiState.update { it.copy(isPlaying = true) }
+        playbackJob = viewModelScope.launch {
+            while (isActive) {
+                val frameDuration = (1000 / (_uiState.value.project.speed)).toLong()
+                delay(frameDuration)
+                _uiState.update { cs -> cs.copy(currentFrameIndex = (cs.currentFrameIndex + 1) % cs.frames.size) }
+            }
+        }
+    }
+
+    private fun pausePlayback() {
+        playbackJob?.cancel()
+        _uiState.update { it.copy(isPlaying = false) }
+    }
 
     fun loadProject(projectId: String?) {
         if (projectId == null) {
@@ -144,34 +188,5 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             delay(3000)
             _uiState.update { it.copy(showFullScreenControls = false) }
         }
-    }
-
-    fun onExportClicked(context: Context) {
-        _uiState.update { it.copy(exportResult = "Export feature is coming soon!") }
-    }
-    fun clearExportResult() { _uiState.update { it.copy(exportResult = null) } }
-    fun onSpeedSelected(speed: Float) {
-        _uiState.update { it.copy(project = it.project.copy(speed = speed)) }
-        saveProject()
-    }
-    fun onTogglePlayback() { if (_uiState.value.isPlaying) pausePlayback() else startPlayback() }
-    fun onSeekToFrame(frameIndex: Int) {
-        pausePlayback()
-        _uiState.update { it.copy(currentFrameIndex = frameIndex) }
-    }
-    private fun startPlayback() {
-        if (_uiState.value.frames.isEmpty()) return
-        _uiState.update { it.copy(isPlaying = true) }
-        playbackJob = viewModelScope.launch {
-            while (isActive) {
-                val frameDuration = (1000 / (_uiState.value.project.speed)).toLong()
-                delay(frameDuration)
-                _uiState.update { cs -> cs.copy(currentFrameIndex = (cs.currentFrameIndex + 1) % cs.frames.size) }
-            }
-        }
-    }
-    private fun pausePlayback() {
-        playbackJob?.cancel()
-        _uiState.update { it.copy(isPlaying = false) }
     }
 }

@@ -10,8 +10,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // ✅ FIX: Corrected the syntax for Kotlin DSL
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
 rootProject.name = "Life Lapse Slow Motion"
 include(":app")
+
