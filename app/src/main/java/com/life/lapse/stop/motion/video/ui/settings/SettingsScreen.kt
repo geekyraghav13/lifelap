@@ -1,5 +1,9 @@
 package com.life.lapse.stop.motion.video.ui.settings
 
+// ✅ ADDED: New imports for sharing
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +21,7 @@ import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Share // ✅ ADDED: Share icon
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -40,6 +45,8 @@ fun SettingsScreen(
     settingsViewModel: SettingsViewModel = viewModel()
 ) {
     val uiState by settingsViewModel.uiState.collectAsState()
+    // ✅ ADDED: Get the context to use for the share intent
+    val context = LocalContext.current
 
     if (uiState.isThemeDialogOpen) {
         ThemeSelectionDialog(
@@ -91,7 +98,6 @@ fun SettingsScreen(
             SettingsItem(
                 icon = Icons.Default.Brightness4,
                 title = "Theme",
-                // ✅ FIX: Using modern, warning-free way to format text
                 value = uiState.appTheme.name.replace("_", " ").lowercase()
                     .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
             ) {
@@ -126,6 +132,25 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            // ✅ ADDED: Share App item and its logic
+            SettingsItem(
+                icon = Icons.Default.Share,
+                title = "Share App"
+            ) {
+                val sendIntent: Intent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        "Check out this cool Stop Motion app!\n\n" +
+                                "https://play.google.com/store/apps/details?id=${context.packageName}"
+                    )
+                    type = "text/plain"
+                }
+                val shareIntent = Intent.createChooser(sendIntent, null)
+                context.startActivity(shareIntent)
+            }
+
             SettingsItem(
                 icon = Icons.Default.Feedback,
                 title = "Send Feedback"
@@ -141,6 +166,8 @@ fun SettingsScreen(
         }
     }
 }
+
+// ... rest of the file (SettingsItem, Dialogs, Preview) is the same ...
 
 @Composable
 fun SettingsItem(
@@ -194,7 +221,6 @@ private fun ThemeSelectionDialog(
         title = { Text("Choose Theme") },
         text = {
             Column {
-                // ✅ FIX: Using .entries instead of .values()
                 AppTheme.entries.forEach { theme ->
                     Row(
                         Modifier
@@ -211,7 +237,6 @@ private fun ThemeSelectionDialog(
                             onClick = { onThemeSelected(theme) }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        // ✅ FIX: Using modern, warning-free way to format text
                         Text(text = theme.name.replace("_", " ").lowercase()
                             .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
                     }
@@ -242,7 +267,6 @@ private fun QualitySelectionDialog(
         title = { Text("Choose Export Quality") },
         text = {
             Column {
-                // ✅ FIX: Using .entries instead of .values()
                 ExportQuality.entries.forEach { quality ->
                     Row(
                         Modifier
