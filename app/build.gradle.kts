@@ -82,7 +82,7 @@ dependencies {
     // Inside app/build.gradle.kts dependencies block
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-
+    implementation("androidx.compose.foundation:foundation:1.6.8")
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

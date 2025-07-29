@@ -2,27 +2,34 @@ package com.life.lapse.stop.motion.video.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavController
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
+import com.life.lapse.stop.motion.video.MainViewModel
 import com.life.lapse.stop.motion.video.ui.camera.CameraScreen
 import com.life.lapse.stop.motion.video.ui.editor.EditorScreen
 import com.life.lapse.stop.motion.video.ui.editor.EditorViewModel
 import com.life.lapse.stop.motion.video.ui.home.HomeScreen
 import com.life.lapse.stop.motion.video.ui.home.HomeViewModel
+import com.life.lapse.stop.motion.video.ui.onboarding.OnboardingScreen
 import com.life.lapse.stop.motion.video.ui.settings.SettingsScreen
 import com.life.lapse.stop.motion.video.ui.settings.SettingsViewModel
 import java.util.UUID
 
 object NavRoutes {
+    // ✅ FIX: Removed the unused "LAUNCHER" route to fix the warning.
+    const val ONBOARDING = "onboarding"
     const val HOME = "home"
     const val SETTINGS = "settings"
     const val PROJECT_GRAPH = "project_graph"
@@ -33,8 +40,26 @@ object NavRoutes {
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
+    val mainViewModel: MainViewModel = viewModel()
+    val hasCompletedOnboarding by mainViewModel.hasCompletedOnboarding.collectAsState()
 
-    NavHost(navController = navController, startDestination = NavRoutes.HOME) {
+    NavHost(
+        navController = navController,
+        startDestination = if (hasCompletedOnboarding) NavRoutes.HOME else NavRoutes.ONBOARDING
+    ) {
+        composable(NavRoutes.ONBOARDING) {
+            OnboardingScreen(
+                onOnboardingFinished = {
+                    mainViewModel.setOnboardingCompleted()
+                    navController.navigate(NavRoutes.HOME) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
+                        }
+                    }
+                }
+            )
+        }
+
         composable(NavRoutes.HOME) {
             val homeViewModel: HomeViewModel = viewModel()
             HomeScreen(
@@ -50,7 +75,6 @@ fun AppNavigation() {
             )
         }
 
-// Inside AppNavigation.kt
         composable(NavRoutes.SETTINGS) {
             val settingsViewModel: SettingsViewModel = viewModel()
             SettingsScreen(
@@ -102,12 +126,9 @@ fun AppNavigation() {
                 CameraScreen(
                     onNavigateBack = { navController.popBackStack() },
                     projectViewModel = projectViewModel,
-                    // ✅ FIX: This now navigates to the editor and cleans up the back stack.
                     onNavigateToEditor = {
                         val currentProjectId = projectViewModel.uiState.value.project.id
                         navController.navigate("editor/$currentProjectId") {
-                            // This ensures pressing "back" from the editor goes home,
-                            // not back to the camera.
                             popUpTo(NavRoutes.HOME)
                         }
                     }
